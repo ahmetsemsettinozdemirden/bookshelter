@@ -1,41 +1,41 @@
 "use strict";
 const express = require("express");
-const book = express.Router();
+const router = express.Router();
 
-const BookRepository = require('../repos/book');
-
-book.get("/", getBooks)
+router
     .get("/:id", getBook)
+    .get("/", getBooks)
     .put("/", addBook)
-    .post("/", updateBook)
+    .post("/:id", updateBook)
     .delete("/:id", removeBook);
 
-// get books using promise
-function getBooks (req, res) {
+// postgres connection pool
+const db = require('../db/index');
 
-    BookRepository.all().then((books) => {
+// import classes
+const { Book, BookFactory } = require('../repos/book');
 
-        const { rows } = books;
-
-        res.json(rows);
-    }).catch((err) => {
-        res.send(err.stack);
-    });
-
-}
+// book repos instance
+const bookFactory = new BookFactory(db);
 
 // get a book by id using async and await
 async function getBook (req, res) {
 
     const { id } = req.params;
 
-    try {
-        const book = await BookRepository.find(id);
+    const book = await bookFactory.find(id);
 
-        res.json(book.rows[0]);
-    } catch (err) {
+    res.json(book.normalized);
+}
+
+// get books using promise
+function getBooks (req, res) {
+
+    bookFactory.all().then((books) => {
+        res.json(books.map((e) => { return e.normalized }));
+    }).catch((err) => {
         res.send(err.stack);
-    }
+    });
 
 }
 
@@ -43,28 +43,29 @@ async function getBook (req, res) {
 async function addBook (req, res) {
 
     const body = req.body;
-    
-    try {
-        const book = await BookRepository.add([ body.title, body.author, body.description, body.release_date ]);
 
-        res.send(book.rows[0]);
-    } catch (error) {
-        res.send(error);
-    }
+    const book = await bookFactory.add(body.title, body.author, body.description, body.release_date);
+
+    res.send(book.normalized);
 }
 
-function updateBook (req, res) {
+async function updateBook (req, res) {
 
-    // TODO
+    const { id } = req.params;
+    const { title, author, description, release_date } = req.body;
+
+    const book = await bookFactory.update(id, title, author, description, release_date);
     
-    res.json({});
+    res.json(book.normalized);
 }
 
-function removeBook (req, res) {
+async function removeBook (req, res) {
 
-    // TODO
+    const { id } = req.params;
+
+    const book = await bookFactory.remove(id);
     
-    res.json({});
+    res.json(book.normalized);
 }
     
-module.exports = book;
+module.exports = router;
